@@ -1,0 +1,83 @@
+apply plugin: 'java'
+apply plugin: 'war'
+apply plugin: 'eclipse-wtp'
+
+tasks.withType(JavaCompile) {
+   options.incremental = true
+   sourceCompatibility = '1.7'
+   targetCompatibility = '1.7'
+}
+
+repositories {
+   mavenCentral()
+}
+
+configurations {
+   jettyRunner
+   jettyRuntimeClasspath
+}
+
+dependencies {
+   providedCompile 'commons-logging:commons-logging:1.1.3'
+   providedCompile 'javax.servlet:javax.servlet-api:3.0.1'
+
+   compile 'org.slf4j:slf4j-api:1.7.12'
+   compile 'org.slf4j:jcl-over-slf4j:1.7.12'
+   compile 'ch.qos.logback:logback-classic:1.1.3'
+   compile 'javax.ws.rs:javax.ws.rs-api:2.0.1'
+   compile 'com.fasterxml.jackson.core:jackson-databind:2.6.1'
+
+   runtime 'org.jboss.resteasy:resteasy-jaxrs:3.0.12.Final'
+   runtime 'org.jboss.resteasy:resteasy-servlet-initializer:3.0.12.Final'
+   runtime 'org.jboss.resteasy:resteasy-client:3.0.12.Final'
+   runtime 'org.jboss.resteasy:resteasy-jackson2-provider:3.0.12.Final'
+
+   testCompile 'junit:junit:4.12'
+   testCompile 'org.mockito:mockito-core:2.0.31-beta'
+
+   jettyRunner 'org.eclipse.jetty:jetty-runner:9.2.10.v20150310'
+}
+
+// jetty-runner alias
+task run {
+   outputs.upToDateWhen { false }
+}
+
+// local jetty run
+task deployOnLocalJetty(type: JavaExec, dependsOn: assemble) {
+   classpath configurations.jettyRunner.incoming.files
+   main = '-jar'
+   args configurations.jettyRunner.incoming.files.asFileTree.matching({pattern -> pattern.include('**/jetty-runner*.jar')}).singleFile.absolutePath
+   configurations.jettyRuntimeClasspath.incoming.files.asFileTree.visit({
+      fileDetails -> args '--jar'; args fileDetails.file.absolutePath
+   })
+   args '--stop-port'
+   args '8181'
+   args '--stop-key'
+   args 'abc123'
+   args '--out'
+   args "$buildDir/jetty-output.log"
+   args '--config'
+   args "$buildDir/jetty.xml"
+   args war.archivePath
+   
+   doFirst {
+      copy {
+         from "$rootDir/jetty/jetty.xml"; into "$buildDir"; expand(keystorePath: "$buildDir/key.store")
+      }
+	  copy {
+         from "$rootDir/jetty/key.store"; into "$buildDir"
+      }
+   }
+}
+run.dependsOn deployOnLocalJetty
+
+
+
+
+
+// Gradle wrapper task
+// Only used when in need to reinstall the wrapper
+task wrapper(type: Wrapper) {
+   gradleVersion = '2.7'
+}
